@@ -1,0 +1,156 @@
+"""Analysis of CCD images for fourier plane experiments"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import cv2
+
+#%matplotlib auto #Display graphs on new window
+#%matplotlib inline #Display graphs inline
+
+def compare(image, transformation):
+    plt.figure()
+    plt.subplot(121)
+    plt.imshow(image, cmap = 'gray')
+    plt.title('image')
+    plt.subplot(122)
+    plt.imshow(transformation, cmap = 'gray')
+    plt.title('transformation')
+
+def find_centres(image, threshold, size):    
+    """Basic code from A. Rosebrock"""
+    plt.figure()
+    plt.imshow(img, cmap = 'gray')
+    
+    grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    #blurred = cv2.GaussianBlur(grey, (5, 5), 1)
+    thresh = cv2.threshold(grey, threshold, 255, cv2.THRESH_BINARY)[1]
+    
+    cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+                            cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[1]
+    centres = []
+    
+    for c in cnts:
+    	# compute the center of the contour
+        if c.size > size:
+            M = cv2.moments(c)
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            centres.append(np.array([cX, cY]))
+            # draw the contour and center of the shape on the image
+            cv2.drawContours(img, [c], -1, (0, 255, 0), 2)
+            cv2.circle(img, (cX, cY), 7, (255,0,0), -1)
+            cv2.putText(img, "center", (cX - 20, cY - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 2)
+             
+            # show the image
+            cv2.imshow("Image", img)
+            cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
+    return centres
+
+def split_rows(centres, tilt):
+    rows = []
+    row = []
+    last_centre = [0,0]
+    for centre in centres:
+        #print(last_centre)
+        if abs(centre[1] - last_centre[1]) < tilt:
+            row.append(centre)
+            #print('added to row')
+        else:
+            rows.append(np.array(row))
+            #print('new row')
+            row = [centre]
+        last_centre = centre
+    rows.append(np.array(row))
+    
+    return rows[1:]
+
+def split_cols(centres, tilt):
+    cols = []
+    col = []
+    ordered_centres = sorted(centres, key=lambda x: x[0])
+    last_centre = [0,0]
+    for centre in ordered_centres:
+        #print(last_centre)
+        if abs(centre[0] - last_centre[0]) < tilt:
+            col.append(centre)
+            #print('added to row')
+        else:
+            cols.append(np.array(col))
+            #print('new row')
+            col = [centre]
+        last_centre = centre
+    cols.append(np.array(col))
+    
+    return cols[1:]
+
+def difference(lists):
+    diffs = []
+    for l in lists:
+        diff = []
+        for i in range(1,len(l)):
+            change = l[i] - l[i-1]
+            diff.append(change.dot(change))
+        diffs.append(diff)
+    
+    return diffs
+
+def rotate_bound(image, angle):
+    """From imutils by A. Rosebrock"""
+    # grab the dimensions of the image and then determine the
+    # center
+    (h, w) = image.shape[:2]
+    (cX, cY) = (w // 2, h // 2)
+ 
+    # grab the rotation matrix (applying the negative of the
+    # angle to rotate clockwise), then grab the sine and cosine
+    # (i.e., the rotation components of the matrix)
+    M = cv2.getRotationMatrix2D((cX, cY), -angle, 1.0)
+    cos = np.abs(M[0, 0])
+    sin = np.abs(M[0, 1])
+ 
+    # compute the new bounding dimensions of the image
+    nW = int((h * sin) + (w * cos))
+    nH = int((h * cos) + (w * sin))
+ 
+    # adjust the rotation matrix to take into account translation
+    M[0, 2] += (nW / 2) - cX
+    M[1, 2] += (nH / 2) - cY
+ 
+    # perform the actual rotation and return the image
+    return cv2.warpAffine(image, M, (nW, nH))
+
+def align_image(image, row):
+    angles = []
+    for i in range(len(row) - 1):
+        delta_row = row[i+1] - row[i]
+        angles.append(np.arctan(delta_row[1]/delta_row[0]))
+    angle = np.average(np.array(angles))
+    angle =  np.rad2deg(angle)
+    rot_image = rotate_bound(img, -angle)
+    return rot_image
+
+img = cv2.imread("Single_slit/single_slit_fp.png", 1)
+
+rot_image = rotate_bound(img, -10)
+compare(img, rot_image)
+
+centres = find_centres(img, 60, 400)
+rows = split_rows(centres, 40)
+cols = split_cols(centres, 20)
+
+aligned = align_image(img, [centres[4], centres[5], centres[3]])
+compare(img, aligned)
+
+delta_rows = difference(rows)
+delta_cols = difference(cols)
+
+
+plt.imshow(img)
+
+cv2.imshow("image",img)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
