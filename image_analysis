@@ -16,11 +16,7 @@ def compare(image, transformation):
     plt.imshow(transformation, cmap = 'gray')
     plt.title('transformation')
 
-def find_centres(image, threshold, size):    
-    """Basic code from A. Rosebrock"""
-    plt.figure()
-    plt.imshow(img, cmap = 'gray')
-    
+def find_centres(image, threshold, size, show_process):    
     grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     #blurred = cv2.GaussianBlur(grey, (5, 5), 1)
     thresh = cv2.threshold(grey, threshold, 255, cv2.THRESH_BINARY)[1]
@@ -44,8 +40,9 @@ def find_centres(image, threshold, size):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 2)
              
             # show the image
-            cv2.imshow("Image", img)
-            cv2.waitKey(0)
+            if show_process == True:
+                cv2.imshow("Image", img)
+                cv2.waitKey(0)
     cv2.destroyAllWindows()
     
     return centres
@@ -60,12 +57,18 @@ def split_rows(centres, tilt):
             row.append(centre)
             #print('added to row')
         else:
-            rows.append(np.array(row))
+            row = np.array(row)
+            if len(row) > 1:
+                row = row[row[:,0].argsort()]
+            rows.append(row)
             #print('new row')
             row = [centre]
         last_centre = centre
-    rows.append(np.array(row))
-    
+    row = np.array(row)
+    if len(row) > 1:
+        row = row[row[:,0].argsort()]
+    rows.append(row)
+    #Need to check the sorting as it might be doing something weird
     return rows[1:]
 
 def split_cols(centres, tilt):
@@ -123,32 +126,42 @@ def rotate_bound(image, angle):
     # perform the actual rotation and return the image
     return cv2.warpAffine(image, M, (nW, nH))
 
-def align_image(image, row):
+def calculate_tilt(image, row):
     angles = []
     for i in range(len(row) - 1):
         delta_row = row[i+1] - row[i]
         angles.append(np.arctan(delta_row[1]/delta_row[0]))
     angle = np.average(np.array(angles))
     angle =  np.rad2deg(angle)
-    rot_image = rotate_bound(img, -angle)
-    return rot_image
+    return angle
 
-img = cv2.imread("Single_slit/single_slit_fp.png", 1)
+img_name = "Single_slit/single_slit_fp.png"
+#Import image
+img = cv2.imread(img_name, 1)
 
-rot_image = rotate_bound(img, -10)
-compare(img, rot_image)
-
-centres = find_centres(img, 60, 400)
+#find centre of each bright spot and split pattern into rows and columns
+centres = find_centres(img, 60, 400, True)
 rows = split_rows(centres, 40)
 cols = split_cols(centres, 20)
 
-aligned = align_image(img, [centres[4], centres[5], centres[3]])
+#determine tilt angle by using an example row
+angle = calculate_tilt(img, [centres[4], centres[3]])
+aligned = rotate_bound(img, -angle)
 compare(img, aligned)
 
+#import original image again and rotate by tilt angle
+img = rotate_bound(cv2.imread(img_name, 1), -angle)
+
+#find centre of each bright spot and split pattern into rows and columns
+centres = find_centres(img, 80, 800, False)
+rows = split_rows(centres, 40)
+cols = split_cols(centres, 20)
+
+#determine differences betwen rows and columns
 delta_rows = difference(rows)
 delta_cols = difference(cols)
 
-
+#Show image using either matplotlib or cv2
 plt.imshow(img)
 
 cv2.imshow("image",img)
