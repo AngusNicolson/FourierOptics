@@ -1,15 +1,67 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
+import matplotlib.pyplot as plt
 
-img = cv2.imread("Single_Slit/single_slit_fp.png", 1)
-grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-f = np.fft.fft2(grey)
-fshift = np.fft.fftshift(f)
-magnitude_spectrum = 20*np.log(np.abs(fshift))
+lena = cv2.imread('Lena.png')
+gray_lena = cv2.cvtColor(lena, cv2.COLOR_BGR2GRAY)
+img = gray_lena
 
-plt.subplot(121),plt.imshow(img, cmap = 'gray')
-plt.title('Input Image'), plt.xticks([]), plt.yticks([])
-plt.subplot(122),plt.imshow(magnitude_spectrum, cmap = 'gray')
-plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
-plt.show()
+def Fourier(img):
+    fp = np.fft.fft2(img)
+    fp = np.fft.fftshift(fp)
+    return fp
+
+def Inverse_fourier(img):
+    fp = np.fft.ifft2(img)
+    return fp
+
+def Blur(img, size):
+    fp = Fourier(img)
+    centre = [int(img.shape[0]/2),int(img.shape[1]/2)]
+    mask = Circle(img.shape, size, centre)
+    fp = fp*mask
+    imgp = Inverse_fourier(fp)
+    return imgp
+
+def Outline(img, size):
+    fp = Fourier(img)
+    centre = [int(img.shape[0]/2),int(img.shape[1]/2)]
+    mask = np.ones(img.shape)
+    mask += -Circle(img.shape, size, centre)
+    fp = fp*mask
+    imgp = Inverse_fourier(fp)
+    return imgp
+
+def Circle(img_shape, radius, centre):
+    circle = np.zeros(img_shape)
+    for ix in range(circle.shape[0]):
+        for iy in range(circle.shape[0]):
+            distance = np.sqrt((ix-centre[0])**2 + (iy-centre[1])**2)
+            if distance <= radius:
+                circle[ix, iy] += 1
+    return circle
+
+fp = Fourier(img)
+imgp = Inverse_fourier(fp) 
+
+blurry = Blur(img, 20)
+outlined = Outline(img, 30)
+
+
+
+#----------------------------------Display------------------------------
+plt.figure()
+plt.subplot(221)
+plt.title('Image')
+plt.imshow(img, cmap='gray')
+plt.subplot(222)
+plt.title('Fourier Plane')
+plt.imshow(abs(fp), cmap='gray')
+#plt.imshow(abs(imgp), cmap='gray')
+plt.subplot(223)
+plt.title('Low pass filter')
+plt.imshow(abs(blurry), cmap='gray')
+plt.subplot(224)
+plt.title('High pass filter')
+plt.imshow(abs(outlined), cmap='gray')
+plt.tight_layout()
